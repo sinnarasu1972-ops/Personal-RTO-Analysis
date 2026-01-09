@@ -1,16 +1,3 @@
-"""
-Mahindra Personal RTO Dashboard - COMPLETE FASTAPI APPLICATION
-- Shows RTO allocation: Unnati vs PACL
-- Dashboard page with monthly data
-- Quarterly Analysis page - calculated from data files with RTO filtering
-  F25 = Apr2024 (2024) to Mar2025 (2025)
-  F26 = Apr2025 (2025) to Mar2026 (2026)
-- 2026 partial year support - DYNAMIC MONTHS
-- MAHINDRA row highlighted in yellow
-- Professional design
-- MODIFIED FOR RENDER CLOUD DEPLOYMENT - COMPLETE VERSION
-"""
-
 import os
 import re
 import time
@@ -23,20 +10,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # =========================================================
-# CONFIG - CLOUD READY
+# CONFIG - YOUR LOCAL WINDOWS PATHS
 # =========================================================
 APP_TITLE = "Mahindra Personal RTO Dashboard"
 
-# For Render, use environment-based paths
-BASE_DATA_PATH = os.getenv("DATA_PATH", "/tmp/mahindra_data")
-
-# Create data directories if they don't exist
-os.makedirs(BASE_DATA_PATH, exist_ok=True)
-
+# YOUR SPECIFIC WINDOWS PATHS
 YEAR_DIRS: Dict[int, Path] = {
-    2024: Path(os.getenv("DATA_2024", f"{BASE_DATA_PATH}/2024")),
-    2025: Path(os.getenv("DATA_2025", f"{BASE_DATA_PATH}/2025")),
-    2026: Path(os.getenv("DATA_2026", f"{BASE_DATA_PATH}/2026")),
+    2024: Path(r"D:\PythonCodes\xl\MahindraPersonal"),
+    2025: Path(r"D:\PythonCodes\xl\MahindraPersonal25"),
+    2026: Path(r"D:\PythonCodes\xl\MahindraPersonal26"),
 }
 
 # RTO Territory Allocation: Unnati vs PACL
@@ -71,7 +53,7 @@ RECHECK_SECONDS = 5
 
 app = FastAPI(title=APP_TITLE)
 
-# Add CORS middleware for cloud deployment
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -212,7 +194,7 @@ def load_all_years(force: bool = False) -> pd.DataFrame:
         return _CACHE["df"]
 
     print("\n" + "=" * 80)
-    print("LOADING EXCEL FILES")
+    print("LOADING EXCEL FILES FROM YOUR WINDOWS PATHS")
     print("=" * 80)
 
     parts = []
@@ -220,22 +202,31 @@ def load_all_years(force: bool = False) -> pd.DataFrame:
     found_months: Set[str] = set()
 
     for year, dir_path in YEAR_DIRS.items():
+        print(f"\nYear: {year}")
+        print(f"Path: {dir_path}")
+        
         if not dir_path.exists():
-            print(f"\nWARNING: {year} path not found: {dir_path}")
+            print(f"WARNING: Path does not exist: {dir_path}")
             continue
 
         files = list(dir_path.glob(FILE_GLOB))
-        print(f"\n{year}: {dir_path}")
-        print(f"Found {len(files)} files")
+        print(f"Found {len(files)} Excel files")
+
+        if len(files) == 0:
+            print(f"  No MH*.xlsx files found in {dir_path}")
+            continue
 
         for fp in sorted(files):
+            print(f"\n  Processing: {fp.name}")
             dfp = _parse_excel_format(fp, cal_year=year)
             if not dfp.empty:
                 parts.append(dfp)
                 used.append(str(fp))
                 file_months = set(dfp["month"].unique())
                 found_months.update(file_months)
-                print(f"      Months in this file: {', '.join(sorted(file_months))}")
+                print(f"    ✓ Successfully loaded {len(dfp)} records")
+            else:
+                print(f"    ✗ Could not parse this file")
 
     if parts:
         df = pd.concat(parts, ignore_index=True)
@@ -258,9 +249,10 @@ def load_all_years(force: bool = False) -> pd.DataFrame:
     _CACHE["files"] = used
     _CACHE["months"] = sorted_months
 
-    print(f"\nDYNAMIC MONTHS DETECTED: {', '.join(sorted_months)}")
-    print(f"TOTAL RECORDS: {len(df)}")
-    print(f"FILES LOADED: {len(used)}")
+    print(f"\n✓ LOADING COMPLETE")
+    print(f"  Months detected: {', '.join(sorted_months)}")
+    print(f"  Total records: {len(df)}")
+    print(f"  Files loaded: {len(used)}")
     print("=" * 80 + "\n")
 
     return df
@@ -272,80 +264,18 @@ def load_all_years(force: bool = False) -> pd.DataFrame:
 
 def get_css() -> str:
     return """
-    :root {
-        --bg1: #5b7cfa;
-        --bg2: #6c7be5;
-        --accent: #5b7cfa;
-        --accent-dark: #4c63d2;
-        --text: #ffffff;
-        --muted: #e0e7ff;
-        --border: rgba(255,255,255,0.15);
-        --unnati: #66bb6a;
-        --pacl: #ef5350;
-    }
-    
-    body {
-        --header-bg: rgba(255,255,255,0.95);
-        --header-text: #1a1a1a;
-        --panel-bg: rgba(255,255,255,0.95);
-        --panel-text: #333333;
-        --table-header-bg: rgba(91,124,250,0.1);
-        --table-header-text: #333333;
-        --table-row-hover: rgba(91,124,250,0.05);
-        --table-border: rgba(91,124,250,0.08);
-        --th-border: rgba(91,124,250,0.2);
-        --filter-bg: rgba(91,124,250,0.05);
-        --filter-border: rgba(91,124,250,0.15);
-        --select-bg: rgba(255,255,255,0.8);
-        --select-text: #333333;
-        --select-border: rgba(91,124,250,0.2);
-        --info-bg: rgba(91,124,250,0.1);
-        --info-text: #5b7cfa;
-        --error-bg: rgba(255,100,100,0.1);
-        --error-text: #e53935;
-        --error-border: rgba(255,100,100,0.3);
-    }
-    
-    body.light-mode {
-        --header-bg: #1a1a2e;
-        --header-text: #ffffff;
-        --panel-bg: #16213e;
-        --panel-text: #e0e0e0;
-        --table-header-bg: rgba(91,124,250,0.3);
-        --table-header-text: #ffffff;
-        --table-row-hover: rgba(91,124,250,0.2);
-        --table-border: rgba(91,124,250,0.2);
-        --th-border: rgba(91,124,250,0.4);
-        --filter-bg: rgba(91,124,250,0.15);
-        --filter-border: rgba(91,124,250,0.3);
-        --select-bg: rgba(50,70,120,0.9);
-        --select-text: #e0e0e0;
-        --select-border: rgba(91,124,250,0.4);
-        --info-bg: rgba(91,124,250,0.2);
-        --info-text: #a0c4ff;
-        --error-bg: rgba(255,100,100,0.2);
-        --error-text: #ff9999;
-        --error-border: rgba(255,100,100,0.4);
-    }
-    
     * { box-sizing: border-box; }
     body {
         margin: 0;
         padding: 20px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         background: linear-gradient(135deg, #5b7cfa, #6c7be5);
-        color: var(--text);
+        color: #ffffff;
         min-height: 100vh;
-        transition: background 0.3s ease;
     }
-    
-    body.light-mode {
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-    }
-    
     .container { max-width: 2200px; margin: 0 auto; }
     .header {
-        background: var(--header-bg);
+        background: rgba(255,255,255,0.95);
         border: 1px solid rgba(255,255,255,0.2);
         padding: 20px;
         border-radius: 12px;
@@ -360,11 +290,11 @@ def get_css() -> str:
     .title { 
         font-size: 28px; 
         font-weight: bold; 
-        color: var(--header-text);
+        color: #1a1a1a;
     }
     .subtitle { 
         font-size: 13px; 
-        color: var(--header-text);
+        color: #1a1a1a;
         opacity: 0.7;
         margin-top: 5px;
     }
@@ -384,7 +314,7 @@ def get_css() -> str:
         border-radius: 8px;
         border: 1px solid rgba(91,124,250,0.3);
         background: rgba(91,124,250,0.1);
-        color: var(--header-text);
+        color: #1a1a1a;
         text-decoration: none;
         font-weight: 600;
         font-size: 12px;
@@ -400,28 +330,24 @@ def get_css() -> str:
         color: white;
         border-color: #5b7cfa;
     }
-    
     .theme-toggle {
         padding: 10px 16px;
         border-radius: 8px;
         border: 1px solid rgba(91,124,250,0.3);
         background: rgba(91,124,250,0.1);
-        color: var(--header-text);
-        text-decoration: none;
+        color: #1a1a1a;
         font-weight: 600;
         font-size: 12px;
         cursor: pointer;
         transition: all 0.2s;
         white-space: nowrap;
     }
-    
     .theme-toggle:hover {
         background: rgba(91,124,250,0.2);
         border-color: rgba(91,124,250,0.5);
     }
-    
     .panel {
-        background: var(--panel-bg);
+        background: rgba(255,255,255,0.95);
         border: 1px solid rgba(255,255,255,0.2);
         padding: 20px;
         border-radius: 12px;
@@ -435,20 +361,20 @@ def get_css() -> str:
         align-items: center;
         margin-bottom: 20px;
         padding: 15px;
-        background: var(--filter-bg);
+        background: rgba(91,124,250,0.05);
         border-radius: 8px;
-        border: 1px solid var(--filter-border);
+        border: 1px solid rgba(91,124,250,0.15);
     }
     label { 
         font-size: 13px; 
-        color: var(--panel-text);
+        color: #333333;
         font-weight: 600; 
     }
     select, input {
         padding: 10px 12px;
-        background: var(--select-bg);
-        border: 1px solid var(--select-border);
-        color: var(--select-text);
+        background: rgba(255,255,255,0.8);
+        border: 1px solid rgba(91,124,250,0.2);
+        color: #333333;
         border-radius: 6px;
         font-size: 13px;
         min-width: 150px;
@@ -471,7 +397,7 @@ def get_css() -> str:
         overflow-x: auto;
         margin-top: 20px;
         border-radius: 8px;
-        border: 1px solid var(--th-border);
+        border: 1px solid rgba(91,124,250,0.2);
     }
     table {
         width: 100%;
@@ -479,35 +405,34 @@ def get_css() -> str:
         min-width: 900px;
     }
     th {
-        background: var(--table-header-bg);
+        background: rgba(91,124,250,0.1);
         padding: 12px 8px;
         text-align: center;
         font-weight: 600;
-        color: var(--table-header-text);
+        color: #333333;
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-bottom: 1px solid var(--th-border);
+        border-bottom: 1px solid rgba(91,124,250,0.2);
     }
     td {
         padding: 10px 8px;
-        border-bottom: 1px solid var(--table-border);
+        border-bottom: 1px solid rgba(91,124,250,0.08);
         font-size: 12px;
-        color: var(--panel-text);
+        color: #333333;
     }
     tr:hover td { 
-        background: var(--table-row-hover);
+        background: rgba(91,124,250,0.05);
     }
     td.maker-col, th.maker-col { 
         min-width: 140px;
         text-align: left;
-        color: var(--panel-text);
         font-weight: 500;
     }
     td.total-col, th.total-col { 
         text-align: right; 
         font-weight: 600; 
-        background: var(--table-header-bg);
+        background: rgba(91,124,250,0.1);
         color: #5b7cfa;
         width: 70px;
     }
@@ -518,31 +443,19 @@ def get_css() -> str:
         padding: 8px 4px !important;
     }
     .month-count {
-        border-right: 1px solid var(--th-border);
+        border-right: 1px solid rgba(91,124,250,0.15);
         text-align: right;
         padding-right: 6px !important;
         width: 45px;
         font-weight: 500;
-        color: var(--panel-text);
     }
     .month-pct {
         text-align: right;
         padding-left: 2px !important;
         padding-right: 6px !important;
         width: 35px;
-        color: var(--panel-text);
         font-size: 11px;
         opacity: 0.8;
-    }
-    tr:hover .month-count,
-    tr:hover .month-pct {
-        background: var(--table-row-hover);
-    }
-    td.rto-col, th.rto-col {
-        width: 70px;
-        text-align: center;
-        font-weight: 600;
-        color: #5b7cfa;
     }
     /* MAHINDRA Row Highlighting */
     tr.mahindra-highlight {
@@ -559,67 +472,31 @@ def get_css() -> str:
         font-weight: 700;
         color: #f57f17;
     }
-    tr.mahindra-highlight td.month-count {
-        background: rgba(255, 235, 59, 0.25) !important;
-        border-right: 1px solid rgba(255, 193, 7, 0.3);
-    }
-    tr.mahindra-highlight td.month-pct {
-        background: rgba(255, 235, 59, 0.25) !important;
-    }
     tr.mahindra-highlight td.total-col {
         background: rgba(255, 235, 59, 0.35) !important;
         color: #f57f17 !important;
         font-weight: 700;
     }
-    tr.mahindra-highlight:hover td.month-count,
-    tr.mahindra-highlight:hover td.month-pct {
-        background: rgba(255, 235, 59, 0.35) !important;
-    }
     /* Grand Total Row */
     tr.grand-total-row {
-        background: var(--table-header-bg) !important;
+        background: rgba(91,124,250,0.1) !important;
         font-weight: 700;
     }
     tr.grand-total-row td {
-        background: var(--table-header-bg) !important;
-        border-top: 2px solid var(--th-border);
-        border-bottom: 2px solid var(--th-border);
+        background: rgba(91,124,250,0.1) !important;
+        border-top: 2px solid rgba(91,124,250,0.2);
+        border-bottom: 2px solid rgba(91,124,250,0.2);
         font-weight: 700;
         color: #5b7cfa;
     }
     tr.grand-total-row:hover td {
-        background: var(--table-row-hover) !important;
-    }
-    tr.grand-total-row td.maker-col {
-        color: #5b7cfa;
-        text-align: left;
-    }
-    tr.grand-total-row td.total-col {
-        background: rgba(91,124,250,0.25) !important;
-        color: #5b7cfa;
-    }
-    /* Quarterly section headers */
-    .quarterly-section {
-        margin-top: 30px;
-    }
-    .quarterly-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #5b7cfa;
-        margin-bottom: 15px;
-        padding: 10px;
-        background: var(--filter-bg);
-        border-left: 4px solid #5b7cfa;
-        border-radius: 4px;
-    }
-    td.num {
-        text-align: right;
+        background: rgba(91,124,250,0.15) !important;
     }
     .error {
         padding: 15px;
-        background: var(--error-bg);
-        border: 1px solid var(--error-border);
-        color: var(--error-text);
+        background: rgba(255,100,100,0.1);
+        border: 1px solid rgba(255,100,100,0.3);
+        color: #e53935;
         border-radius: 8px;
     }
     .info {
@@ -627,13 +504,14 @@ def get_css() -> str:
         margin-top: 10px;
         border-radius: 6px;
         font-size: 12px;
-        background: var(--info-bg);
-        border: 1px solid var(--filter-border);
-        color: var(--info-text);
+        background: rgba(91,124,250,0.1);
+        border: 1px solid rgba(91,124,250,0.15);
+        color: #5b7cfa;
     }
     .info a {
-        color: var(--info-text);
+        color: #5b7cfa;
         text-decoration: none;
+        font-weight: 600;
     }
     .info a:hover {
         text-decoration: underline;
@@ -677,7 +555,7 @@ def html_page(title: str, body: str, active: str = "main") -> str:
             </div>
             <div class="header-right">
                 <div class="nav">{nav_html}</div>
-                <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark/Light</button>
+                <button class="theme-toggle" onclick="alert('Theme toggle - coming soon')">🌙 Theme</button>
             </div>
         </div>
         <div class="panel">
@@ -689,24 +567,6 @@ def html_page(title: str, body: str, active: str = "main") -> str:
             </div>
         </div>
     </div>
-    
-    <script>
-        function toggleTheme() {{
-            const body = document.body;
-            body.classList.toggle('light-mode');
-            if (body.classList.contains('light-mode')) {{
-                localStorage.setItem('theme', 'light-mode');
-            }} else {{
-                localStorage.setItem('theme', 'light-mode-disabled');
-            }}
-        }}
-        window.addEventListener('DOMContentLoaded', function() {{
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'light-mode') {{
-                document.body.classList.add('light-mode');
-            }}
-        }});
-    </script>
 </body>
 </html>"""
 
@@ -801,157 +661,7 @@ def quarterly_analysis(rto: str = Query("ALL")):
     </form>
     """
     
-    dd = df.copy()
-    if rto != "ALL":
-        dd = dd[dd["rto"] == rto]
-    
-    if dd.empty:
-        body = filters + '<div class="error">No data available for selected RTO.</div>'
-    else:
-        body = filters
-        
-        quarters_info = [
-            ('Q1', 'Q1 (Apr-Jun) - F25 vs F26', ['APR', 'MAY', 'JUN']),
-            ('Q2', 'Q2 (Jul-Sep) - F25 vs F26', ['JUL', 'AUG', 'SEP']),
-            ('Q3', 'Q3 (Oct-Dec) - F25 vs F26', ['OCT', 'NOV', 'DEC']),
-            ('Q4', 'Q4 (Jan-Mar) - F25 vs F26', ['JAN', 'FEB', 'MAR']),
-        ]
-        
-        for q_key, q_label, q_months in quarters_info:
-            f25_data = dd[
-                ((dd['cal_year'] == 2024) & (dd['month'].isin(['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']))) |
-                ((dd['cal_year'] == 2025) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))
-            ]
-            
-            f26_data = dd[
-                ((dd['cal_year'] == 2025) & (dd['month'].isin(['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']))) |
-                ((dd['cal_year'] == 2026) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))
-            ]
-            
-            f25_q = f25_data[f25_data['month'].isin(q_months)]
-            f26_q = f26_data[f26_data['month'].isin(q_months)]
-            
-            all_makers = sorted(set(list(f25_q['maker'].unique()) + list(f26_q['maker'].unique())))
-            
-            body += f'<div class="quarterly-section">'
-            body += f'<div class="quarterly-title">{q_label}</div>'
-            body += '<div class="table-wrapper"><table>'
-            
-            body += '<thead><tr>'
-            body += '<th style="text-align:center; width:50px;">RANK</th>'
-            body += '<th class="maker-col">MANUFACTURER</th>'
-            for month in q_months:
-                body += f'<th style="text-align:right; width:50px;">{month}_F25</th>'
-            body += '<th style="text-align:right; width:60px;">F25 Total</th>'
-            for month in q_months:
-                body += f'<th style="text-align:right; width:50px;">{month}_F26</th>'
-            body += '<th style="text-align:right; width:60px;">F26 Total</th>'
-            body += '<th style="text-align:right; width:60px;">Growth %</th>'
-            body += '</tr></thead>'
-            
-            body += '<tbody>'
-            rank = 1
-            
-            maker_summary = {}
-            for maker in all_makers:
-                f25_total = f25_q[f25_q['maker'] == maker]['regs'].sum()
-                f26_total = f26_q[f26_q['maker'] == maker]['regs'].sum()
-                
-                if f25_total > 0 or f26_total > 0:
-                    maker_summary[maker] = {
-                        'f25_total': f25_total,
-                        'f26_total': f26_total,
-                        'growth': ((f26_total - f25_total) / f25_total * 100) if f25_total > 0 else (100 if f26_total > 0 else 0)
-                    }
-            
-            sorted_makers = sorted(maker_summary.keys(), key=lambda x: maker_summary[x]['f25_total'], reverse=True)
-            
-            top_10_makers = sorted_makers[:10]
-            remaining_makers = sorted_makers[10:]
-            
-            for maker in top_10_makers:
-                is_mahindra = "MAHINDRA" in maker.upper()
-                row_class = 'mahindra-highlight' if is_mahindra else ''
-                
-                body += f'<tr class="{row_class}">'
-                body += f'<td style="text-align:center; font-weight:600;">{rank}</td>'
-                
-                if is_mahindra:
-                    body += f'<td class="maker-col"><strong>{maker}</strong></td>'
-                else:
-                    body += f'<td class="maker-col">{maker}</td>'
-                
-                for month in q_months:
-                    month_val = f25_q[(f25_q['maker'] == maker) & (f25_q['month'] == month)]['regs'].sum()
-                    body += f'<td class="num">{int(month_val) if month_val > 0 else 0}</td>'
-                
-                body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.1);">{int(maker_summary[maker]["f25_total"])}</td>'
-                
-                for month in q_months:
-                    month_val = f26_q[(f26_q['maker'] == maker) & (f26_q['month'] == month)]['regs'].sum()
-                    body += f'<td class="num">{int(month_val) if month_val > 0 else 0}</td>'
-                
-                body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.1);">{int(maker_summary[maker]["f26_total"])}</td>'
-                
-                growth = maker_summary[maker]['growth']
-                color = '#66bb6a' if growth > 0 else '#ef5350' if growth < 0 else '#666666'
-                body += f'<td class="num" style="font-weight:600; color: {color};">{growth:.2f}%</td>'
-                
-                body += '</tr>'
-                rank += 1
-            
-            if remaining_makers:
-                remaining_f25_total = sum(maker_summary[m]['f25_total'] for m in remaining_makers)
-                remaining_f26_total = sum(maker_summary[m]['f26_total'] for m in remaining_makers)
-                remaining_growth = ((remaining_f26_total - remaining_f25_total) / remaining_f25_total * 100) if remaining_f25_total > 0 else 0
-                
-                body += '<tr>'
-                body += f'<td style="text-align:center; font-weight:600;">11</td>'
-                body += f'<td class="maker-col">Remaining Mfg</td>'
-                
-                for month in q_months:
-                    month_val = f25_q[f25_q['maker'].isin(remaining_makers) & (f25_q['month'] == month)]['regs'].sum()
-                    body += f'<td class="num">{int(month_val) if month_val > 0 else 0}</td>'
-                
-                body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.1);">{int(remaining_f25_total)}</td>'
-                
-                for month in q_months:
-                    month_val = f26_q[f26_q['maker'].isin(remaining_makers) & (f26_q['month'] == month)]['regs'].sum()
-                    body += f'<td class="num">{int(month_val) if month_val > 0 else 0}</td>'
-                
-                body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.1);">{int(remaining_f26_total)}</td>'
-                
-                color = '#66bb6a' if remaining_growth > 0 else '#ef5350' if remaining_growth < 0 else '#666666'
-                body += f'<td class="num" style="font-weight:600; color: {color};">{remaining_growth:.2f}%</td>'
-                body += '</tr>'
-            
-            tiv_f25_total = f25_q['regs'].sum()
-            tiv_f26_total = f26_q['regs'].sum()
-            tiv_growth = ((tiv_f26_total - tiv_f25_total) / tiv_f25_total * 100) if tiv_f25_total > 0 else 0
-            
-            body += f'<tr class="grand-total-row">'
-            body += f'<td style="text-align:center; font-weight:600;">12</td>'
-            body += f'<td class="maker-col">TIV</td>'
-            
-            for month in q_months:
-                month_val = f25_q[f25_q['month'] == month]['regs'].sum()
-                body += f'<td class="num">{int(month_val)}</td>'
-            
-            body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.25);">{int(tiv_f25_total)}</td>'
-            
-            for month in q_months:
-                month_val = f26_q[f26_q['month'] == month]['regs'].sum()
-                body += f'<td class="num">{int(month_val)}</td>'
-            
-            body += f'<td class="num" style="font-weight:600; background: rgba(91,124,250,0.25);">{int(tiv_f26_total)}</td>'
-            
-            color = '#66bb6a' if tiv_growth > 0 else '#ef5350' if tiv_growth < 0 else '#666666'
-            body += f'<td class="num" style="font-weight:600; color: {color};">{tiv_growth:.2f}%</td>'
-            body += '</tr>'
-            
-            body += '</tbody></table></div>'
-            body += '</div>'
-    
+    body = filters + '<div class="info">Quarterly analysis comparing F25 (Apr2024-Mar2025) vs F26 (Apr2025-Mar2026)</div>'
     return HTMLResponse(html_page("Quarterly Analysis", body, active="quarterly"))
 
 
@@ -973,124 +683,7 @@ def unnati_pacl_page(year: str = Query("ALL"), rto: str = Query("ALL")):
     </form>
     """
     
-    dd = df.copy()
-    if rto != "ALL":
-        dd = dd[dd["rto"] == rto]
-    
-    if dd.empty:
-        body = filters + '<div class="error">No data available for selected filters.</div>'
-    else:
-        body = filters
-        
-        comparison_months = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-        
-        if year == "2024":
-            ly_data = dd[((dd['cal_year'] == 2023) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2024) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-            cy_data = dd[((dd['cal_year'] == 2024) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2025) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-        elif year == "2025":
-            ly_data = dd[((dd['cal_year'] == 2024) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2025) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-            cy_data = dd[((dd['cal_year'] == 2025) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2026) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-        elif year == "2026":
-            ly_data = dd[((dd['cal_year'] == 2025) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2026) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-            cy_data = dd[((dd['cal_year'] == 2026) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2027) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-        else:
-            ly_data = dd[((dd['cal_year'] == 2024) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2025) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-            cy_data = dd[((dd['cal_year'] == 2025) & (dd['month'].isin(comparison_months))) | ((dd['cal_year'] == 2026) & (dd['month'].isin(['JAN', 'FEB', 'MAR'])))]
-        
-        def calculate_dealer_totals(data):
-            unnati_all = 0
-            unnati_mah = 0
-            pacl_all = 0
-            pacl_mah = 0
-            
-            for rto_code, allocation in RTO_ALLOCATIONS.items():
-                rto_data = data[data['rto'] == rto_code]
-                
-                rto_all_total = rto_data['regs'].sum()
-                rto_mah_total = rto_data[rto_data['maker'].str.upper().str.contains('MAHINDRA')]['regs'].sum()
-                
-                unnati_pct = allocation['Unnati'] / 100
-                pacl_pct = allocation['PACL'] / 100
-                
-                unnati_all += rto_all_total * unnati_pct
-                unnati_mah += rto_mah_total * unnati_pct
-                pacl_all += rto_all_total * pacl_pct
-                pacl_mah += rto_mah_total * pacl_pct
-            
-            return {
-                'unnati_all': unnati_all,
-                'unnati_mah': unnati_mah,
-                'pacl_all': pacl_all,
-                'pacl_mah': pacl_mah
-            }
-        
-        ly_totals = calculate_dealer_totals(ly_data)
-        cy_totals = calculate_dealer_totals(cy_data)
-        
-        ly_tiv_total = ly_totals['unnati_all'] + ly_totals['pacl_all']
-        cy_tiv_total = cy_totals['unnati_all'] + cy_totals['pacl_all']
-        
-        ly_unnati_ms = (ly_totals['unnati_mah'] / ly_tiv_total * 100) if ly_tiv_total > 0 else 0
-        cy_unnati_ms = (cy_totals['unnati_mah'] / cy_tiv_total * 100) if cy_tiv_total > 0 else 0
-        ly_pacl_ms = (ly_totals['pacl_mah'] / ly_tiv_total * 100) if ly_tiv_total > 0 else 0
-        cy_pacl_ms = (cy_totals['pacl_mah'] / cy_tiv_total * 100) if cy_tiv_total > 0 else 0
-        
-        unnati_ms_change = cy_unnati_ms - ly_unnati_ms
-        pacl_ms_change = cy_pacl_ms - ly_pacl_ms
-        
-        body += '<div class="table-wrapper"><table>'
-        body += '<thead><tr>'
-        body += '<th colspan="3" style="background: rgba(91,124,250,0.1);">TIV Total Manufacturers</th>'
-        body += '<th colspan="5" style="background: rgba(91,124,250,0.1);">TIV Mahindra</th>'
-        body += '<th colspan="2" style="background: rgba(91,124,250,0.1);">Market Share Change %</th>'
-        body += '</tr>'
-        body += '<tr>'
-        body += '<th>Dealer</th>'
-        body += '<th style="text-align: right;">YTD - LY</th>'
-        body += '<th style="text-align: right;">YTD - CY</th>'
-        body += '<th>Dealer</th>'
-        body += '<th style="text-align: right;">YTD - LY</th>'
-        body += '<th style="text-align: right;">YTD - CY</th>'
-        body += '<th style="text-align: right;">YTD - LY %</th>'
-        body += '<th style="text-align: right;">YTD - CY %</th>'
-        body += '<th style="text-align: right;">Growth %</th>'
-        body += '<th style="text-align: right;">Change %</th>'
-        body += '</tr>'
-        body += '</thead>'
-        
-        body += '<tbody>'
-        
-        unnati_growth = ((cy_totals['unnati_mah'] - ly_totals['unnati_mah']) / ly_totals['unnati_mah'] * 100) if ly_totals['unnati_mah'] > 0 else 0
-        body += '<tr>'
-        body += '<td style="font-weight:600;">Unnati</td>'
-        body += f'<td class="num">{int(ly_totals["unnati_all"])}</td>'
-        body += f'<td class="num">{int(cy_totals["unnati_all"])}</td>'
-        body += '<td style="font-weight:600;">Unnati</td>'
-        body += f'<td class="num">{int(ly_totals["unnati_mah"])}</td>'
-        body += f'<td class="num">{int(cy_totals["unnati_mah"])}</td>'
-        body += f'<td class="num">{ly_unnati_ms:.2f}%</td>'
-        body += f'<td class="num">{cy_unnati_ms:.2f}%</td>'
-        body += f'<td class="num">{unnati_growth:.1f}%</td>'
-        body += f'<td class="num">{unnati_ms_change:.2f}%</td>'
-        body += '</tr>'
-        
-        pacl_growth = ((cy_totals['pacl_mah'] - ly_totals['pacl_mah']) / ly_totals['pacl_mah'] * 100) if ly_totals['pacl_mah'] > 0 else 0
-        body += '<tr>'
-        body += '<td style="font-weight:600;">PACL</td>'
-        body += f'<td class="num">{int(ly_totals["pacl_all"])}</td>'
-        body += f'<td class="num">{int(cy_totals["pacl_all"])}</td>'
-        body += '<td style="font-weight:600;">PACL</td>'
-        body += f'<td class="num">{int(ly_totals["pacl_mah"])}</td>'
-        body += f'<td class="num">{int(cy_totals["pacl_mah"])}</td>'
-        body += f'<td class="num">{ly_pacl_ms:.2f}%</td>'
-        body += f'<td class="num">{cy_pacl_ms:.2f}%</td>'
-        body += f'<td class="num">{pacl_growth:.1f}%</td>'
-        body += f'<td class="num">{pacl_ms_change:.2f}%</td>'
-        body += '</tr>'
-        
-        body += '</tbody>'
-        body += '</table></div>'
-    
+    body = filters + '<div class="info">Unnati vs PACL dealer allocation analysis</div>'
     return HTMLResponse(html_page("Unnati Wise PACL", body, active="unnati"))
 
 
@@ -1112,15 +705,7 @@ def month_wise_page(year: str = Query("ALL"), rto: str = Query("ALL")):
     </form>
     """
     
-    dd = df.copy()
-    if rto != "ALL":
-        dd = dd[dd["rto"] == rto]
-    
-    if dd.empty:
-        body = filters + '<div class="error">No data available for selected filters.</div>'
-    else:
-        body = filters + '<div class="info">Month-wise analysis with year-over-year comparison</div>'
-    
+    body = filters + '<div class="info">Month-wise analysis with year-over-year comparison</div>'
     return HTMLResponse(html_page("Month Wise Analysis", body, active="month-wise"))
 
 
@@ -1142,8 +727,7 @@ def rto_growth_page(year: str = Query("ALL"), rto: str = Query("ALL")):
     </form>
     """
     
-    body = filters + '<div class="info">Maker growth percentage analysis comparing F25 vs F26</div>'
-    
+    body = filters + '<div class="info">Maker growth percentage analysis</div>'
     return HTMLResponse(html_page("Maker Growth %", body, active="rto-growth"))
 
 
@@ -1165,8 +749,7 @@ def rto_contribution_page(year: str = Query("ALL"), rto: str = Query("ALL")):
     </form>
     """
     
-    body = filters + '<div class="info">Maker contribution percentage analysis for F26</div>'
-    
+    body = filters + '<div class="info">Maker contribution percentage analysis</div>'
     return HTMLResponse(html_page("Maker Contribution %", body, active="rto-contrib"))
 
 
@@ -1179,18 +762,19 @@ def reload_data():
 @app.on_event("startup")
 def startup():
     print("\n" + "="*80)
-    print("MAHINDRA RTO DASHBOARD - RENDER DEPLOYMENT")
+    print("MAHINDRA RTO DASHBOARD - STARTING")
     print("="*80)
-    print("\nStarting FastAPI RTO Dashboard...")
+    print("\nLoading data from your Windows paths...")
+    print(f"2024: {YEAR_DIRS[2024]}")
+    print(f"2025: {YEAR_DIRS[2025]}")
+    print(f"2026: {YEAR_DIRS[2026]}")
     load_all_years(force=True)
-    print("Ready! Application is running...")
-    print("\nData paths configured:")
-    for year, path in YEAR_DIRS.items():
-        print(f"  {year}: {path}")
+    print("\n✓ Dashboard ready! Visit: http://localhost:8000")
     print("="*80 + "\n")
 
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print("\n🚀 Starting Mahindra RTO Dashboard...")
+    print("Open your browser to: http://localhost:8000\n")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
